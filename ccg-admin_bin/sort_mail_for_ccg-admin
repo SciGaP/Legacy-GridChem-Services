@@ -1,0 +1,138 @@
+#!/usr/bin/perl
+
+$mail_archive = '/home/ccg-admin/mail_archive';
+#$admin        = 'troney@ncsa.uiuc.edu,gazula@ccs.uky.edu';
+#$admin        = 'troney@ncsa.uiuc.edu';
+$admin        = 'spamidig@ncsa.uiuc.edu';
+
+###
+### No other configuration settings.
+###
+
+###
+### Slurp up the mail message into an array
+###
+
+while (<STDIN>) {
+    push @message, "$_";
+}
+
+###
+### We are going to write the contents of the
+### @message array to a file.  The filename is
+### to reflect the subject line.  Find the
+### subject line.
+###
+
+foreach $line (@message) {
+    chop $line;
+    next if ("$line" !~ /^Subject: /);
+    $subject = "$line";
+    last;
+}
+
+###
+### Clean up the subject line so we can
+### create a legitimate filename.
+###
+
+###
+### Remove the "Subject: " string:
+### Subject: Job 65650: <g03l.%J> started.
+###
+
+$subject =~ s/Subject:\ //;
+
+###
+### Remove the "Subject: " string:
+### Subject: Job 65650: <g03l.%J> started.
+###
+
+$subject =~ s/Subject:\ //;
+
+
+###
+### Remove the "[Condor] " string:
+### [Condor] Condor Job 108222.0
+###
+
+$subject =~ s/\[Condor\] //;
+
+###
+### Replace the " <" and "> " strings with underbars:
+### Job 65650: <g03l.%J> started.
+###
+
+$subject =~ s/ </_/g;
+$subject =~ s/> /_/g;
+
+###
+### Replace 'all' spaces with underbars:
+### PBS JOB 43104.mike2
+###
+
+$subject =~ s/\ /_/g;
+
+###
+### Remove "_started." and "_Done" string:
+### These original strings
+###   Subject: Job 65537: <g03l.%J> started.
+###   Subject: Job 65537: <g03l.%J> Done
+### have been modified (above) so they are now
+###   Job_65537:_g03l.%J_started.
+###   Job_65537:_g03l.%J_Done
+###
+### No need for ".%J" either.
+###
+
+$subject =~ s/\.%J_started\.//;
+$subject =~ s/\.%J_Done//;
+
+$filename = "${mail_archive}/${subject}";
+
+#DEBUG
+#open (PO, "| /bin/mail -s 'mail_archive info' $admin");
+#    print PO "Should be seeing info regarding mail for ccg-admin.\n";
+#    print PO "\n";
+#    print PO "Filename: $filename\n";
+#    print PO "\n";
+#    print PO "Subject: $subject\n";
+#    print PO "\n";
+#    print PO "Message: \n";
+#    print PO " @message\n";
+#close (PO);
+
+###
+### Append to filenames with same subject.
+###
+
+open (FH, ">> $filename") or &error;
+foreach $line (@message) {
+	print FH "$line\n";
+}
+print FH "\n\n";
+close (FH);
+
+### CSG --- /08/24/06
+### Call Perl script to update Job database
+###
+
+`sleep 10`;
+`DEBUG=1 /home/ccg-admin/bin/update-job-new.pl $filename >> /home/ccg-admin/logs/update.log`;
+
+sub error {
+
+    open (PO, "| /bin/mail -s 'ccg-admin mail archive error' $admin");
+
+        print PO "The script $0\n";
+        print PO "is having trouble, possibly with the creation of the file\n";
+        print PO "${mail_archive}/<subject>\n";
+        print PO "\n";
+        print PO "Please check into this.\n";
+        print PO "\n";
+        print PO "The content of the mail message is:\n";
+        print PO "\n @message\n";
+    close (PO);
+
+    exit;
+}
